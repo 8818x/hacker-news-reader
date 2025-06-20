@@ -2,7 +2,17 @@ import db from "./db";
 import type { Story } from "../types/story";
 import { storyExists } from "./getStory";
 
+const isSQLiteDisabled = process.env.VERCEL === "1";
+const isProd = process.env.NODE_ENV === "production";
+
 export function storeStory(story: Story) {
+	if (isSQLiteDisabled || isProd) {
+		console.log(`[storeStory] Skipped: SQLite is disabled in this environment.`);
+		return;
+	}
+
+	if (!story || typeof story.id !== "number") return;
+
 	if (storyExists(story.id)) return;
 
 	const insertStory = db.prepare(`

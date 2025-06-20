@@ -1,0 +1,163 @@
+import type { Metadata } from "next";
+import { JSX } from "react";
+import type { Story } from "@/types/story";
+
+
+async function fetchStoryData(id: string): Promise<Story | null> {
+	try {
+		const res = await fetch(
+			`https://hacker-news.firebaseio.com/v0/item/${id}.json`,
+			{ next: { revalidate: 60 } }
+		);
+
+		if (!res.ok) {
+			console.error(`Story ${id} fetch failed`);
+			return null;
+		}
+
+		const story: Story | null = await res.json();
+		if (!story) {
+			console.warn(`Story ${id} not found.`);
+			return null;
+		}
+
+		return story;
+	} catch (error) {
+		console.error(`Unexpected error while fetching story ${id}:`, error);
+		return null;
+	}
+}
+
+
+interface StoryPageProps {
+	params: { id: string };
+}
+
+export async function generateMetadata({
+	params
+}: {
+	params: { id: string };
+}): Promise<Metadata> {
+	try {
+		const res = await fetch(
+			`https://hacker-news.firebaseio.com/v0/item/${params.id}.json`,
+			{ next: { revalidate: 60 } }
+		);
+
+		if (!res.ok) {
+			console.error(`Metadata fetch failed for story ${params.id}`);
+			return {
+				title: "Story Not Found",
+				description: "The story could not be loaded or does not exist."
+			};
+		}
+
+		const data: Story | null = await res.json();
+		if (!data) {
+			console.warn(`Metadata not found for story ${params.id}`);
+			return {
+				title: "Story Not Found",
+				description: "The story could not be loaded or does not exist."
+			};
+		}
+
+		return {
+			title: data.title || "No Title",
+			description: `Story ID: ${params.id}`
+		};
+	} catch (error) {
+		console.error(`Unexpected error while generating metadata for story ${params.id}:`, error);
+		return {
+			title: "Story Not Found",
+			description: "The story could not be loaded or does not exist."
+		};
+	}
+}
+
+export default async function StoryPage({ params }: StoryPageProps) {
+	const { id } = params;
+	const story = await fetchStoryData(id);
+
+	if (!story) {
+		return (
+			<div className="text-center py-10">
+				<h1 className="text-2xl font-bold">Story Not Found</h1>
+				<p className="mt-2">
+					The story with ID: {id} could not be loaded or does not exist.
+				</p>
+				<p className="text-sm text-gray-500">
+					Please check the ID or try again later.
+				</p>
+			</div>
+		);
+	}
+
+	let commentElements: JSX.Element[] = [];
+
+	if (Array.isArray(story.kids) && story.kids.length > 0) {
+		const comments = await Promise.all(
+			story.kids.slice(0, 5).map(async (commentId) => {
+				try {
+					const res = await fetch(
+						`https://hacker-news.firebaseio.com/v0/item/${commentId}.json`
+					);
+					if (!res.ok) throw new Error(`Failed to fetch comment ${commentId}`);
+					const comment = await res.json();
+					if (!comment || !comment.text) return null;
+
+					return (
+						<li
+							key={comment.id}
+							className="p-4 bg-gray-50 border border-gray-200 rounded"
+							dangerouslySetInnerHTML={{ __html: comment.text }}
+						/>
+					);
+				} catch (err) {
+					console.error(err);
+					return null;
+				}
+			})
+		);
+
+		commentElements = comments.filter(Boolean) as JSX.Element[];
+	}
+
+	return (
+		<div className="max-w-3xl mx-auto my-8 p-6 bg-white shadow-lg rounded-lg">
+			<h1 className="text-3xl font-bold mb-4">{story.title || "No Title"}</h1>
+
+			<p className="text-gray-700 mb-2">
+				<span className="font-semibold">Author:</span> {story.by || "Unknown"}
+				<br />
+				<span className="font-semibold">Score:</span> {story.score || 0}
+			</p>
+
+			{story.url && (
+				<p className="mb-4">
+					<a
+						href={story.url}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="text-blue-600 hover:underline"
+					>
+						Read original article
+					</a>
+				</p>
+			)}
+
+			<div className="mt-6">
+				<h2 className="text-xl font-semibold mb-2">Top-level Comments</h2>
+
+				{Array.isArray(story.kids) && story.kids.length > 0 ? (
+					commentElements.length > 0 ? (
+						<ul className="space-y-4">{commentElements}</ul>
+					) : (
+						<p className="text-gray-500">No comments available.</p>
+					)
+				) : (
+					<p className="text-gray-500 italic">This story has no comments.</p>
+				)}
+			</div>
+		</div>
+	);
+}

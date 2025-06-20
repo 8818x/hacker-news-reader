@@ -1,0 +1,36 @@
+import db from "./db";
+import type { Story } from "../types/story";
+import { storyExists } from "./getStory";
+
+export function storeStory(story: Story) {
+	if (storyExists(story.id)) return;
+
+	const insertStory = db.prepare(`
+		INSERT INTO stories (id, title, by, url, time, descendants, score, type)
+		VALUES (@id, @title, @by, @url, @time, @descendants, @score, @type)
+		ON CONFLICT(id) DO UPDATE SET
+			title = excluded.title,
+			by = excluded.by,
+			url = excluded.url,
+			time = excluded.time,
+			descendants = excluded.descendants,
+			score = excluded.score,
+			type = excluded.type
+	`);
+	insertStory.run(story);
+
+	const deleteKids = db.prepare(`DELETE FROM story_kids WHERE story_id = ?`);
+	deleteKids.run(story.id);
+
+	if (Array.isArray(story.kids)) {
+		const insertKid = db.prepare(`
+			INSERT INTO story_kids (story_id, kid_id) VALUES (?, ?)
+		`);
+		const insertMany = db.transaction((kids: number[]) => {
+			for (const kidId of kids) {
+				insertKid.run(story.id, kidId);
+			}
+		});
+		insertMany(story.kids);
+	}
+}

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { JSX } from "react";
 import type { Story } from "@/types/story";
+import { JSX } from "react";
 
+type PageParams = Promise<{ id: string }>;
 
 async function fetchStoryData(id: string): Promise<Story | null> {
 	try {
@@ -9,84 +10,38 @@ async function fetchStoryData(id: string): Promise<Story | null> {
 			`https://hacker-news.firebaseio.com/v0/item/${id}.json`,
 			{ next: { revalidate: 60 } }
 		);
-
-		if (!res.ok) {
-			console.error(`Story ${id} fetch failed`);
-			return null;
-		}
-
-		const story: Story | null = await res.json();
-		if (!story) {
-			console.warn(`Story ${id} not found.`);
-			return null;
-		}
-
-		return story;
-	} catch (error) {
-		console.error(`Unexpected error while fetching story ${id}:`, error);
+		if (!res.ok) return null;
+		return await res.json();
+	} catch (err) {
+		console.error(err);
 		return null;
 	}
-}
-
-
-interface StoryPageProps {
-	params: { id: string };
 }
 
 export async function generateMetadata({
 	params
 }: {
-	params: { id: string };
+	params: PageParams;
 }): Promise<Metadata> {
-	try {
-		const res = await fetch(
-			`https://hacker-news.firebaseio.com/v0/item/${params.id}.json`,
-			{ next: { revalidate: 60 } }
-		);
+	const { id } = await params;
+	const story = await fetchStoryData(id);
 
-		if (!res.ok) {
-			console.error(`Metadata fetch failed for story ${params.id}`);
-			return {
-				title: "Story Not Found",
-				description: "The story could not be loaded or does not exist."
-			};
-		}
-
-		const data: Story | null = await res.json();
-		if (!data) {
-			console.warn(`Metadata not found for story ${params.id}`);
-			return {
-				title: "Story Not Found",
-				description: "The story could not be loaded or does not exist."
-			};
-		}
-
-		return {
-			title: data.title || "No Title",
-			description: `Story ID: ${params.id}`
-		};
-	} catch (error) {
-		console.error(`Unexpected error while generating metadata for story ${params.id}:`, error);
-		return {
-			title: "Story Not Found",
-			description: "The story could not be loaded or does not exist."
-		};
-	}
+	return {
+		title: story?.title || "Story Not Found",
+		description: `Story ID: ${id}`
+	};
 }
 
-export default async function StoryPage({ params }: StoryPageProps) {
-	const { id } = params;
+export default async function StoryPage({ params }: { params: PageParams }) {
+	const { id } = await params;
 	const story = await fetchStoryData(id);
 
 	if (!story) {
 		return (
 			<div className="text-center py-10">
 				<h1 className="text-2xl font-bold">Story Not Found</h1>
-				<p className="mt-2">
+				<p className="text-sm text-gray-500 mt-2">
 					The story with ID: {id} could not be loaded or does not exist.
-				</p>
-				<p className="text-sm text-gray-500">
-					Please check the ID or try again later.
 				</p>
 			</div>
 		);
@@ -108,7 +63,7 @@ export default async function StoryPage({ params }: StoryPageProps) {
 					return (
 						<li
 							key={comment.id}
-							className="p-4 bg-gray-50 border border-gray-200 rounded"
+							className="p-4 bg-gray-50 border border-gray-200 rounded overflow-x-auto break-words prose max-w-full"
 							dangerouslySetInnerHTML={{ __html: comment.text }}
 						/>
 					);
@@ -121,7 +76,6 @@ export default async function StoryPage({ params }: StoryPageProps) {
 
 		commentElements = comments.filter(Boolean) as JSX.Element[];
 	}
-
 	return (
 		<div className="max-w-3xl mx-auto my-8 p-6 bg-white shadow-lg rounded-lg">
 			<h1 className="text-3xl font-bold mb-4">{story.title || "No Title"}</h1>

@@ -5,7 +5,9 @@ import { storeStory } from "@/lib/storeStory";
 export default async function Home() {
 	const resIds = await fetch(
 		"https://hacker-news.firebaseio.com/v0/topstories.json",
-		{ next: { revalidate: 60 } }
+		{
+			cache: "no-store"
+		}
 	);
 
 	if (!resIds.ok) {
@@ -18,7 +20,10 @@ export default async function Home() {
 	const storyData = await Promise.all(
 		topTen.map(async (id) => {
 			const res = await fetch(
-				`https://hacker-news.firebaseio.com/v0/item/${id}.json`
+				`https://hacker-news.firebaseio.com/v0/item/${id}.json`,
+				{
+					cache: "no-store"
+				}
 			);
 			if (!res.ok) {
 				throw new Error(`Failed to fetch story ${id}: ${res.status}`);

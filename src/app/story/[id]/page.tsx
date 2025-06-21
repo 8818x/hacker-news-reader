@@ -8,7 +8,7 @@ async function fetchStoryData(id: string): Promise<Story | null> {
 	try {
 		const res = await fetch(
 			`https://hacker-news.firebaseio.com/v0/item/${id}.json`,
-			{ next: { revalidate: 60 } }
+			{ cache: "no-store" }
 		);
 		if (!res.ok) return null;
 		return await res.json();

@@ -31,7 +31,7 @@ export default async function Home() {
 
 			const story = (await res.json()) as Story;
 
-			storeStory(story);
+			// storeStory(story);
 
 			return story;
 		})

@@ -1,41 +1,9 @@
 import Link from "next/link";
-import type { Story } from "@/types/story";
-import { storeStory } from "@/lib/storeStory";
+import { topStoryIds, fetchStories } from "@/lib/hnApi";
 
 export default async function Home() {
-	const resIds = await fetch(
-		"https://hacker-news.firebaseio.com/v0/topstories.json",
-		{
-			cache: "no-store"
-		}
-	);
-
-	if (!resIds.ok) {
-		throw new Error(`Failed to fetch story ids: ${resIds.status}`);
-	}
-
-	const ids = (await resIds.json()) as number[];
-	const topTen = ids.slice(0, 10);
-
-	const storyData = await Promise.all(
-		topTen.map(async (id) => {
-			const res = await fetch(
-				`https://hacker-news.firebaseio.com/v0/item/${id}.json`,
-				{
-					cache: "no-store"
-				}
-			);
-			if (!res.ok) {
-				throw new Error(`Failed to fetch story ${id}: ${res.status}`);
-			}
-
-			const story = (await res.json()) as Story;
-
-			// storeStory(story);
-
-			return story;
-		})
-	);
+	const ids = await topStoryIds();
+	const stories = await fetchStories(ids.slice(0, 10));
 
 	return (
 		<div className="container max-w-2xl mx-auto px-4 py-6">
@@ -43,9 +11,9 @@ export default async function Home() {
 				Top 10 Hacker News Stories
 			</h1>
 			<ul>
-				{storyData.map((story) => (
+				{stories.map((story) => (
 					<li key={story.id} className="border-b pb-4">
-						<Link href={`/story/${story.id}`} rel="noopener noreferrer">
+						<Link href={`/story/${story.id}`}>
 							<h2 className="text-lg font-semibold hover:underline">
 								{story.title}
 							</h2>

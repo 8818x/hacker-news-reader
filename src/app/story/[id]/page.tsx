@@ -1,22 +1,18 @@
+import { cache } from "react";
 import type { Metadata } from "next";
 import type { Story } from "@/types/story";
+import { fetchItem } from "@/lib/hnApi";
 import { JSX } from "react";
 
 type PageParams = Promise<{ id: string }>;
 
-async function fetchStoryData(id: string): Promise<Story | null> {
+const getStory = cache(async (id: string): Promise<Story | null> => {
 	try {
-		const res = await fetch(
-			`https://hacker-news.firebaseio.com/v0/item/${id}.json`,
-			{ cache: "no-store" }
-		);
-		if (!res.ok) return null;
-		return await res.json();
-	} catch (err) {
-		console.error(err);
+		return await fetchItem<Story>(Number(id));
+	} catch {
 		return null;
 	}
-}
+});
 
 export async function generateMetadata({
 	params
@@ -24,7 +20,7 @@ export async function generateMetadata({
 	params: PageParams;
 }): Promise<Metadata> {
 	const { id } = await params;
-	const story = await fetchStoryData(id);
+	const story = await getStory(id);
 
 	return {
 		title: story?.title || "Story Not Found",
@@ -34,7 +30,7 @@ export async function generateMetadata({
 
 export default async function StoryPage({ params }: { params: PageParams }) {
 	const { id } = await params;
-	const story = await fetchStoryData(id);
+	const story = await getStory(id);
 
 	if (!story) {
 		return (
@@ -53,12 +49,8 @@ export default async function StoryPage({ params }: { params: PageParams }) {
 		const comments = await Promise.all(
 			story.kids.slice(0, 5).map(async (commentId) => {
 				try {
-					const res = await fetch(
-						`https://hacker-news.firebaseio.com/v0/item/${commentId}.json`
-					);
-					if (!res.ok) throw new Error(`Failed to fetch comment ${commentId}`);
-					const comment = await res.json();
-					if (!comment || !comment.text) return null;
+					const comment = await fetchItem<{ text?: string; id: number }>(commentId);
+					if (!comment?.text) return null;
 
 					return (
 						<li
@@ -67,8 +59,7 @@ export default async function StoryPage({ params }: { params: PageParams }) {
 							dangerouslySetInnerHTML={{ __html: comment.text }}
 						/>
 					);
-				} catch (err) {
-					console.error(err);
+				} catch {
 					return null;
 				}
 			})
